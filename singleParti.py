@@ -56,6 +56,9 @@ class vdPlay(vidInfo):
             self.fps = cap.get(cv2.CAP_PROP_FPS)
             self.outPutInfo
             
+#            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE,(3,3))
+#            fgbg = cv2.createBackgroundSubtractorMOG2()
+            
             cap.set(cv2.CAP_PROP_POS_FRAMES,self.curFrameNo)
             while(cap.isOpened()):  
                 cmd=''
@@ -63,6 +66,12 @@ class vdPlay(vidInfo):
                 ret, frame = cap.read()  
                 self.curImg=frame
                 cv2.imshow('image', frame)  
+                
+#                fgmask = fgbg.apply(frame)
+##                fgmask = cv2.morphologyEx(fgmask, cv2.MORPH_OPEN, kernel)
+#                cv2.imshow('frame',fgmask)
+
+
                 Key = cv2.waitKey(1)  
                 if (Key & 0xff == ord('q')): 
                     self.release()
@@ -93,6 +102,8 @@ class ctrl:
                 's':self.svImg,
                 'c':self.findCorner
                   }
+        
+    
         
     def svImg(self):
         cv2.imwrite('thumb/'+'frm_'+self.vids.filename+str(self.vids.curFrameNo)+'.png',self.vids.curImg)

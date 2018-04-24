@@ -11,7 +11,7 @@ import  cv2
 from sklearn import linear_model
 from sklearn.cluster import KMeans
 from mpl_toolkits.mplot3d import Axes3D 
-
+import time
 
 def  sigmoid(inX):
     try:
@@ -54,12 +54,12 @@ class imgPreProc:
         self.impath='thumb/frm_lsa20187x3.mp4416.png'
         
         '''cv2:BGR   plt RGB'''
-        self.img=cv2.imread(self.impath)[:,:,::-1]
+        self.img=cv2.imread(self.impath)#[:,:,::-1]
         print self.img.shape,'imgshape'
             
         self.HarrisParameter = [2,9,0.02]
         self.HarrisRespThresh=0.03
-        self.ctl =linear_model.RANSACRegressor(linear_model.LinearRegression())
+        #self.ctl =linear_model.RANSACRegressor(linear_model.LinearRegression())
         self.kmeans= KMeans(n_clusters=2, random_state=0)
         self.grayB=self.img[:,:,-1]
         self.gray=cv2.cvtColor(self.img,cv2.COLOR_BGR2GRAY)  
@@ -69,8 +69,13 @@ class imgPreProc:
         '''project img to color vector or norm2'''
         self.strenthenByProj=True
         self.clustedColorVec=[0,0,0]
-        
+        self.strenthenMap =[]
         self.strethenMagnitude=0.5
+        
+        #calculated color center
+        self.dotCluster=np.array([0,0,0])
+        
+        self.bVerifyDots = False
 
 
 
@@ -116,9 +121,11 @@ class imgPreProc:
         
         '''try to calc the threshold by getThresh() later'''
         cornerMap[np.where(dst>self.HarrisRespThresh*dst.max())]=255
+       
+        '''
         plt.figure('cornerMap')
         plt.imshow(dst)
-        
+       ''' 
         return cornerMap
 
     def getThresh(self,biImg,thresh=127,typ='otsu'):
@@ -178,8 +185,8 @@ class imgPreProc:
         self.conductAreaByBinaImg(conerMap)
         #ret, self.labels, self.stats, self.centroids = cv2.connectedComponentsWithStats(conerMap.astype(np.uint8))
         
-        plt.figure('labels')
-        plt.imshow(self.labels)
+#        plt.figure('labels')
+#        plt.imshow(self.labels)
 
 
     def clusterDotColor(self):
@@ -206,9 +213,9 @@ class imgPreProc:
         
         print 'centers:',self.kmeans.cluster_centers_
         
-        center0=self.labels[np.where(self.labels != nodots)][np.where(self.kmeans.labels_==0)]
-        center1=self.labels[np.where(self.labels != nodots)][np.where(self.kmeans.labels_==1)]
-        
+#        center0=self.labels[np.where(self.labels != nodots)][np.where(self.kmeans.labels_==0)]
+#        center1=self.labels[np.where(self.labels != nodots)][np.where(self.kmeans.labels_==1)]
+#        
         imgMean=self.calcImgMean()
         
         if self.bUseNormlizedImg:
@@ -222,18 +229,20 @@ class imgPreProc:
         if euDist0>euDist1:
             print 'cluster 0 is the dot color'
             self.clustedColorVec=self.kmeans.cluster_centers_[0]/np.linalg.norm(self.kmeans.cluster_centers_[0])
+            self.dotCluster = self.kmeans.cluster_centers_[0]
             return 0,self.kmeans.cluster_centers_[0]
         else:
             print 'cluster 1 is the dot color'
             self.clustedColorVec=self.kmeans.cluster_centers_[1]/np.linalg.norm(self.kmeans.cluster_centers_[1])
+            self.dotCluster = self.kmeans.cluster_centers_[1]
             return 1,self.kmeans.cluster_centers_[1]
     
      
     def predictDot(self,inImg):
         
     
-        pred1=[-1]
-        pred2=[-1]
+        pred1=[]
+        pred2=[]
         for i in xrange(self.centroids.__len__()):
             if self.stats[i,-1]>500:
                 continue
@@ -247,7 +256,7 @@ class imgPreProc:
         self.grayB=self.img[:,:,-1]
         
     def calcStrenthenMap(self):   
-        _,dotCluster=self.clusterDotColor()
+        #_,self.dotCluster=self.clusterDotColor()
         if self.bUseNormlizedImg:
             normMat = np.linalg.norm(self.img,2,2)+1e-2
             imgMap=self.img/(normMat.reshape(self.img.shape[0],self.img.shape[1],1))
@@ -257,19 +266,21 @@ class imgPreProc:
         else:
             imgMap=self.img
         if self.strenthenByProj:
-            euDist = np.linalg.norm(np.cross(imgMap,dotCluster),2,2)
+            euDist = np.linalg.norm(np.cross(imgMap,self.dotCluster),2,2)
         else:
-            euDist = np.linalg.norm(imgMap - dotCluster,2,2)
+            euDist = np.linalg.norm(imgMap - self.dotCluster,2,2)
         imgStd=np.std(euDist)
         
-        strenthenMap= kerFunc(self.strethenMagnitude*imgStd,euDist)
+        self.strenthenMap= kerFunc(self.strethenMagnitude*imgStd,euDist)
         
-        return strenthenMap
+        
+        #return strenthenMap
     
     
     def strenthenImg(self):    
-        strenthenMap =self.calcStrenthenMap()
-        
+
+        strenthenMap =self.strenthenMap
+
         def showStrenImg():
             plt.figure('strenthened color')
             plt.imshow((self.img*strenthenMap.reshape(strenthenMap.shape[0],strenthenMap.shape[1],1)).astype(np.uint8))
@@ -285,10 +296,18 @@ class imgPreProc:
             gray2 = np.float32(gray2)  
             plt.figure('strenthened gray2')
             plt.imshow(gray2)
-        return  (PreProc.img*strenthenMap.reshape(strenthenMap.shape[0],strenthenMap.shape[1],1)).astype(np.uint8)
+        return  (self.img*strenthenMap.reshape(strenthenMap.shape[0],strenthenMap.shape[1],1)).astype(np.uint8)
     
-    def projImg2ColorVect(self,imgIn):
-        return
+    def weightCenter(self):
+        wCents=[]
+        for i in xrange(self.centroids.__len__()):
+            if self.stats[i,-1]>500:
+                continue
+            labelRegion = self.gray[np.where(self.labels==i)]
+            labelRegion=(labelRegion.astype(np.float32))/labelRegion.astype(np.float32).sum()
+            wCents.append((labelRegion*np.array(np.where(self.labels==i))).sum(1))
+            
+        return np.array(wCents)[:,::-1]
     
     def subPixelCorner(self,inImg):
         self.getGray(inImg)
@@ -298,36 +317,139 @@ class imgPreProc:
 
 
 
-PreProc=imgPreProc()
 
+class algs:
+    def __init__(self):
+        self.PreProc=imgPreProc()
+        
+        #
+        
+    def getStrenthenImgMap(self):
+        self.PreProc.getGray(self.PreProc.img)
+        self.PreProc.findDotArea(self.PreProc.gray)
+        self.PreProc.subPixelCorner(self.PreProc.img)
+        #
+        _rst,dotCluster=self.PreProc.clusterDotColor()
+        
+        
+    def strenthenImg(self):
+        self.PreProc.calcStrenthenMap()
+        strentenedColorImg =self.PreProc.strenthenImg()
+        #cv2.imshow(strentenedColorImg)
+        return strentenedColorImg
+    
+    def UpDateImg(self, imgIn):
+        self.PreProc.img = imgIn
+        
+    def getDots(self):
+#        t=[]
+#        t.append(time.time())
+        strentenedColorImg=self.strenthenImg()
+        
+        cv2.imshow('d',strentenedColorImg)
+#        self.PreProc.subPixelCorner(strentenedColorImg)
+#        pred1,pred2=self.PreProc.predictDot(strentenedColorImg)
+#        t.append(time.time())
+        self.PreProc.getGray(strentenedColorImg)
+       # t.append(time.time())
+
+        biImg=self.PreProc.getThresh(self.PreProc.gray)#,typ='adapt')
+        biImg=mophors(biImg,kernel= np.ones((3,3),np.uint8),tp='Opening')
+       # t.append(time.time())
+        self.PreProc.conductAreaByBinaImg(biImg)
+#        t.append(time.time())
+        if self.PreProc.bVerifyDots:
+            pred1,pred2=self.PreProc.predictDot(strentenedColorImg)
+       # t.append(time.time())
+       # print pred1,pred2
+        
+        weightCenter = self.PreProc.weightCenter()
+        #t.append(time.time())
+        
+        
+#        print np.array(t)[0:-1]- np.array(t)[1::],(np.array(t)[0:-1]- np.array(t)[1::]).sum()
+        
+        #        self.PreProc.subPixelCorner(strentenedColorImg)
+        
+#        plt.figure('0')
+#        plt.imshow(strentenedColorImg)
+##        plt.plot(self.PreProc.centroids[:,0],self.PreProc.centroids[:,1],'*r')
+#        plt.plot(weightCenter[:,0],weightCenter[:,1],'g.')
+#        cv2.imshow('bi',biImg)
+#        cv2.waitKey(0)
+#        plt.figure('o')
+#        plt.imshow(self.PreProc.img)
+#        plt.figure('strenthened im')
+#        plt.imshow(strentenedColorImg)
+        
+        return weightCenter
+
+
+algsObj= algs()
+def test():
+    global algsObj
+    
+    algsObj.getStrenthenImgMap()
+    
+#    algsObj.strenthenImg()
+
+    weightCenter=algsObj.getDots()
+    
+    
+   
+test()
+
+##
+#PreProc=imgPreProc()
+##def script():
+#PreProc.getGray(PreProc.img)
 #
-PreProc.getGray(PreProc.img)
-PreProc.findDotArea(PreProc.gray)
-PreProc.subPixelCorner(PreProc.img)
+#PreProc.findDotArea(PreProc.gray)
 #
-rst,dotCluster=PreProc.clusterDotColor() 
-strentenedColorImg =PreProc.strenthenImg()
+#PreProc.subPixelCorner(PreProc.img)
+#
+##
+#
+#rst,dotCluster=PreProc.clusterDotColor() 
+#
+#strentenedColorImg =PreProc.strenthenImg()
+#
+#
+#
+#PreProc.subPixelCorner(strentenedColorImg)
+#
+#pred1,pred2=PreProc.predictDot(strentenedColorImg)
+#
+#PreProc.getGray(strentenedColorImg)
+#
+#
+#
+#
+#
+#biImg=PreProc.getThresh(PreProc.gray)#,typ='adapt')
+#
+#mpImg=mophors(biImg,kernel= np.ones((3,3),np.uint8),tp='Opening')
+#
+#PreProc.conductAreaByBinaImg(mpImg)
+#
+#
+#
+#
+#
+#plt.figure('0')
+#
+#plt.imshow(PreProc.gray)
+#
+#plt.plot(PreProc.centroids[:,0],PreProc.centroids[:,1],'*r')
+#
+#
+#plt.figure('o')
+#
+#plt.imshow(PreProc.img)
+#
+#plt.figure('strenthened im')
 
-PreProc.subPixelCorner(strentenedColorImg)
-pred1,pred2=PreProc.predictDot(strentenedColorImg)
-PreProc.getGray(strentenedColorImg)
-
-
-biImg=PreProc.getThresh(PreProc.gray)#,typ='adapt')
-mpImg=mophors(biImg,kernel= np.ones((3,3),np.uint8),tp='Opening')
-PreProc.conductAreaByBinaImg(mpImg)
-
-
-plt.figure('0')
-plt.imshow(PreProc.gray)
-plt.plot(PreProc.centroids[:,0],PreProc.centroids[:,1],'*r')
-plt.plot(PreProc.corners[:,0],PreProc.corners[:,1],'g.')
-plt.figure('o')
-plt.imshow(PreProc.img)
-plt.figure('strenthened im')
-plt.imshow(strentenedColorImg)
-
-
+#plt.imshow(strentenedColorImg)
 #kmeans = KMeans(n_clusters=2, random_state=0).fit(dotAvg)
 #print 'centers:',kmeans.cluster_centers_
 
