@@ -22,11 +22,11 @@ import algs
 
 
 
-lk_params = dict( winSize  = (15, 15),
+lk_params = dict( winSize  = (21, 21),
 
-                  maxLevel = 2,
+                  maxLevel = 3,
 
-                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+                  criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.02))
 
 
 
@@ -65,6 +65,7 @@ class App:
         while True:
 
             _ret, frame = self.cam.read()
+            frame=frame[:,200:-200,:]
             cv2.imshow('v',frame)
             frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             cv2.imshow('v',frame)
@@ -83,15 +84,19 @@ class App:
 
                 p1, _st, _err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
                
-                p0r, _st, _err = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
+                p0r, _st1, _err1 = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
 
                 d = abs(p0-p0r).reshape(-1, 2).max(-1)
                 
-                falseDot = d>1.4
+                falseDot = d>2
                 p1[np.where(falseDot)] = p0[np.where(falseDot)]
                 self.tracks.append(p1)
 
-                good = d < 1
+                good = d < 2
+                
+#                print 'lk stat:', _st, _err
+#                print 'lk bk stat:', _st1, _err1
+                print '  p1',p1.shape
 
 
                 for tr, (x, y), good_flag in zip(self.tracks, p1.reshape(-1, 2), good):
@@ -123,6 +128,15 @@ class App:
                 
                 
                 algs.algsObj.UpDateImg(frame)
+                histOld=algs.algsObj.PreProc.histRGB
+                histNew=algs.algsObj.PreProc.hist()
+                
+                p=[]
+                for i in xrange(3):
+                    p.append(cv2.compareHist(histOld[i],histNew[i],0))
+                th=np.linalg.norm(np.array(p))
+                if th<1.6:
+                    algs.algsObj.getStrenthenImgMap()
                 #algs.algsObj.strenthenImg()
                 p=algs.algsObj.getDots()
                 print self.frame_idx,'al pnt',p.shape
@@ -180,6 +194,8 @@ class App:
             if ch ==ord('q'):
 
                 break
+            elif ch == ord('-'):
+                cv2.waitKey(0)
 
 
 

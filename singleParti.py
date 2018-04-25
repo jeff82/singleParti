@@ -64,6 +64,7 @@ class vdPlay(vidInfo):
                 cmd=''
                 self.curFrameNo+=1
                 ret, frame = cap.read()  
+                frame=frame[:,200:-200,:]
                 self.curImg=frame
                 cv2.imshow('image', frame)  
                 
