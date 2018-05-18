@@ -9,10 +9,13 @@ import numpy as np
 from numpy.linalg import norm
 import matplotlib.pyplot as plt
 import  cv2
+import sys
 from sklearn import linear_model
 from sklearn.cluster import KMeans
 from mpl_toolkits.mplot3d import Axes3D 
 import time
+
+sys.path.append('data')
 
 def  sigmoid(inX):
     try:
@@ -98,13 +101,13 @@ class imgPreProc:
         
         #Filter by Area.
         self.blobParams.filterByArea = True
-        self.blobParams.minArea = 4
+        self.blobParams.minArea = 8
         self.blobParams.maxArea = 1000
-        self.blobParams.minRepeatability = 2
+        self.blobParams.minRepeatability = 5
         
          #Filter by Circularity
-        self.blobParams.filterByCircularity = False
-        self.blobParams.minCircularity = 0.01
+        self.blobParams.filterByCircularity = true
+        self.blobParams.minCircularity = 0.1
         
         # Filter by Convexity
         self.blobParams.filterByConvexity = False

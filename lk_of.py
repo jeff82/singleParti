@@ -11,7 +11,7 @@ Created on Mon Apr 23 00:06:27 2018
 
 import numpy as np
 
-import cv2 
+import cv2
 
 import algs
 
@@ -45,7 +45,7 @@ algs.algsObj.getStrenthenImgMap()
 
 class App:
 
-    def __init__(self, video_src='lsa20187x3.mp4'):
+    def __init__(self, video_src='data\lsa20187x3.mp4'):
 
         self.track_len = 10
 
@@ -53,7 +53,7 @@ class App:
 
         self.tracks = []
 
-        self.cam = cv2.VideoCapture(video_src)  
+        self.cam = cv2.VideoCapture(video_src)
 
         self.frame_idx = 0
 
@@ -71,111 +71,157 @@ class App:
             cv2.imshow('v',frame)
 
             vis = frame.copy()
-            
-           # print 'frameid:',self.frame_idx
+
+            # print 'frameid:',self.frame_idx
 
 
 
             if len(self.tracks) > 0:
 
+                last_dots=[]
+
+                for tr in self.tracks[0].values():
+                    if tr['stat'][-1] > 0:
+                        last_dots.append(tr['pos'][-1])
+
                 img0, img1 = self.prev_gray, frame_gray
 
-                p0 = np.float32(self.tracks[-1]).reshape(-1, 1, 2)
+
+
+                p0 = np.array(last_dots).reshape(-1,1,2).astype(np.float32)
+                print '========='
+
+
+
+                # p0 = cv2.goodFeaturesToTrack(img0, mask=None, **feature_params)
+                #
+                # print p0,p0.shape,'f0adsf'
 
                 p1, _st, _err = cv2.calcOpticalFlowPyrLK(img0, img1, p0, None, **lk_params)
-               
+
                 p0r, _st1, _err1 = cv2.calcOpticalFlowPyrLK(img1, img0, p1, None, **lk_params)
 
                 d = abs(p0-p0r).reshape(-1, 2).max(-1)
-                
-                falseDot = d>2
-                p1[np.where(falseDot)] = p0[np.where(falseDot)]
-                self.tracks.append(p1)
 
                 good = d < 2
-                
-#                print 'lk stat:', _st, _err
-#                print 'lk bk stat:', _st1, _err1
+
+                #                print 'lk stat:', _st, _err
+                #                print 'lk bk stat:', _st1, _err1
                 print '  p1',p1.shape
 
 
-                for tr, (x, y), good_flag in zip(self.tracks, p1.reshape(-1, 2), good):
-#
+                for tr,  [x, y], good_flag in zip(self.tracks[0].values(),p1.reshape(-1, 2), good):
+                    #
                     if not good_flag:
 
-#                        continue
-                        pass
-#
-#                    tr.append([x, y])
-#
-##                    if len(tr) > self.track_len:
-##
-##                        del tr[0]
-#
-#                    new_tracks.append(tr)
+                        tr['stat']=np.hstack([tr['stat'],-1])
+                        tr['frm']=np.hstack([tr['frm'], self.frame_idx])
+                        tr['pos']=np.vstack([tr['pos'], np.array([-1,-1])])
+
+
+                    #                        continue
+                    else:
+                        tr['stat'] = np.hstack([tr['stat'], 1])
+                        tr['frm'] = np.hstack([tr['frm'], self.frame_idx])
+                        tr['pos'] = np.vstack([tr['pos'], np.array([x, y])])
+
+                    #
+                    #                    tr.append([x, y])
+                    #
+                    ##                    if len(tr) > self.track_len:
+                    ##
+                    ##                        del tr[0]
+                    #
+                    #                    new_tracks.append(tr)
 
                     cv2.circle(vis, (x, y), 20, (0, 255, 0), 1,1)
 
-#                self.tracks = new_tracks
+            #                self.tracks = new_tracks
 
-                    #cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
+            #cv2.polylines(vis, [np.int32(tr) for tr in self.tracks], False, (0, 255, 0))
 
-#                draw_str(vis, (20, 20), 'track count: %d' % len(self.tracks))
+            #                draw_str(vis, (20, 20), 'track count: %d' % len(self.tracks))
 
 
 
             if self.frame_idx % self.detect_interval == 0:
-                
-                
+
+
                 algs.algsObj.UpDateImg(frame)
                 histOld=algs.algsObj.PreProc.histRGB
                 histNew=algs.algsObj.PreProc.hist()
-                
-                p=[]
+
+                hists=[]
+                dotsTr={}
                 for i in xrange(3):
-                    p.append(cv2.compareHist(histOld[i],histNew[i],0))
-                th=np.linalg.norm(np.array(p))
+                    hists.append(cv2.compareHist(histOld[i],histNew[i],0))
+                th=np.linalg.norm(np.array(hists))
                 if th<1.6:
                     algs.algsObj.getStrenthenImgMap()
                 #algs.algsObj.strenthenImg()
-                p=algs.algsObj.getDots()
-                print self.frame_idx,'al pnt',p.shape
-                
-                if len(self.tracks) == 0:
-                    self.tracks.append(p)
-                else:
-                    
-                
-                    for tr in self.tracks[-1]:
-                        distNewPnt2old = np.linalg.norm((p-tr[-1]),2,1)
-                        p=p[np.where(distNewPnt2old>1.4)]
-#                        print 
-#                        if np.linalg.norm((p-tr[-1]),2,1)<1.4:#the dots already in self.tracks
-#                            continue
-#                        else:
-                    print '    new pnt',p.shape
-                    if len(p)>0:
-                        self.tracks.append(np.vstack([self.tracks[-1],p.reshape(-1,1,2)]))
+                pts=algs.algsObj.getDots()
 
-#                mask = np.zeros_like(frame_gray)
-#
-#                mask[:] = 255
-#
-#                for x, y in [np.int32(tr[-1]) for tr in self.tracks]:
-#
-#                    cv2.circle(mask, (x, y), 25, 0, 1)
-#
-#                p = cv2.goodFeaturesToTrack(frame_gray, mask = mask, **feature_params)
-#                print '+++++++++'
-#                print p
-#                print '++======'
-#
-#                if p is not None:
-#
-#                    for x, y in np.float32(p).reshape(-1, 2):
-#
-#                        self.tracks.append([(x, y)])
-#
+                print self.frame_idx,'al pnt',pts.shape
+
+                if len(self.tracks) == 0:
+
+                    for i,p in enumerate(pts):
+                        dotsTr.update({i:{
+                            'pos':np.array([p]),
+                            'stat': np.array([1]),
+                            'frm':np.array([0])}
+                        })
+
+                    self.tracks.append(dotsTr)
+                else:
+
+                    maxDotId = np.array(self.tracks[0].keys()).max()
+                    print 'max dot Id', maxDotId
+
+                    last_dots=[]
+
+                    for tr in self.tracks[0].values():
+                        if tr['stat'][-1]>0:
+                            # last_dots.append(tr['pos'][-1])
+
+                            distNewPnt2old = np.linalg.norm((pts-np.array(tr['pos'][-1])),2,1)
+                            pts=pts[np.where(distNewPnt2old>1.4)]
+                    #                        print
+                    #                        if np.linalg.norm((pts-tr[-1]),2,1)<1.4:#the dots already in self.tracks
+                    #                            continue
+                    #                        else:
+                    print '    new pnt', pts.shape
+                    if len(pts)>0:
+                        for i in xrange(len(pts)):
+                            self.tracks[0].update(
+                                {
+                                    maxDotId+i+1:{
+                                        'pos': np.array([pts[i]]),
+                                        'stat': np.array([1]),
+                                        'frm': np.array([self.frame_idx])
+                                    }
+                                }
+                            )
+
+            #                mask = np.zeros_like(frame_gray)
+            #
+            #                mask[:] = 255
+            #
+            #                for x, y in [np.int32(tr[-1]) for tr in self.tracks]:
+            #
+            #                    cv2.circle(mask, (x, y), 25, 0, 1)
+            #
+            #                p = cv2.goodFeaturesToTrack(frame_gray, mask = mask, **feature_params)
+            #                print '+++++++++'
+            #                print p
+            #                print '++======'
+            #
+            #                if p is not None:
+            #
+            #                    for x, y in np.float32(p).reshape(-1, 2):
+            #
+            #                        self.tracks.append([(x, y)])
+            #
 
 
 
@@ -185,7 +231,7 @@ class App:
             self.prev_gray = frame_gray
 
             cv2.imshow('lk_track', vis)
-#            cv2.imshow('lk_track_mask', mask)
+            #            cv2.imshow('lk_track_mask', mask)
 
 
 
